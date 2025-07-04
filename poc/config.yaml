@@ -1,0 +1,4 @@
+wallet_address: "YourAgentSolanaWalletAddressHere"
+rate_per_token: 0.00001  # TRUSD per token
+currency: "TRUSD"
+network: "solana"

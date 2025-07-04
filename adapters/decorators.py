@@ -3,6 +3,11 @@ from fastapi.responses import JSONResponse
 from functools import wraps
 from .payment import verify_jwt, verify_onchain
 from .phone_verification import check_phone_verified
+import yaml
+from functools import wraps
+from langchain.schema import LLMResult
+
+from solana.rpc.api import Client as SolanaClient
 
 def modelex_paywall(price: float, currency: str = "TRUSD", phone_required: bool = False):
     def decorator(func):
@@ -46,3 +51,23 @@ def modelex_paywall(price: float, currency: str = "TRUSD", phone_required: bool 
             return await func(*args, **kwargs)
         return wrapper
     return decorator
+
+
+import yaml
+from functools import wraps
+from langchain.schema import LLMResult
+
+from solana.rpc.api import Client as SolanaClient  # or your preferred Solana SDK
+
+# Load Modelex config once
+with open("config.yaml", "r") as f:
+    config = yaml.safe_load(f)
+
+AGENT_WALLET = config["wallet_address"]
+RATE_PER_TOKEN = config["rate_per_token"]
+CURRENCY = config["currency"]
+NETWORK = config["network"]
+
+# Optional: initialize your Solana client
+solana_client = SolanaClient("https://api.mainnet-beta.solana.com")
+
