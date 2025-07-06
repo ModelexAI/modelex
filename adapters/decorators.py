@@ -1,73 +1,56 @@
+import asyncio
+import time
+from functools import wraps
+from typing import Optional, Callable
 from fastapi import Request
 from fastapi.responses import JSONResponse
-from functools import wraps
-from .payment import verify_jwt, verify_onchain
-from .phone_verification import check_phone_verified
-import yaml
-from functools import wraps
-from langchain.schema import LLMResult
 
-from solana.rpc.api import Client as SolanaClient
+from adapters.payment import verify_jwt, verify_onchain
+from adapters.phone_verification import check_phone_verified
+#from adapters.crawler_identification import identify_crawler
 
-def modelex_paywall(price: float, currency: str = "TRUSD", phone_required: bool = False):
+
+def modelex_paywall(
+    price: float
+) -> Callable:
+    """
+    Decorator to enforce phone verification and payment requirements on FastAPI endpoints.
+    Args:
+        price: price required for the request
+    """
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, request: Request, **kwargs):
-            # 1) Safely get headers
-            token = request.headers.get("Authorization")
+            phone_number: Optional[str] = request.headers.get("X-Phone-Number")
+            token = _extract_auth_token(request)
             wallet = request.headers.get("X-Wallet-Address")
-
-            if token and token.startswith("Bearer "):
-                token = token.replace("Bearer ", "")
-
-            paid = False
-            if token:
-                paid = verify_jwt(token, min_amount=price)
-            if not paid and wallet:
-                paid = verify_onchain(wallet, min_amount=price)
-
-            if not paid:
+            if not check_phone_verified(request):
+                return JSONResponse(
+                    status_code=403,
+                    content={"error": "Request forfeited: phone number not verified."}
+                )
+            # Phone is verified, now check for payment linked to this phone number
+            jwt_valid = token and verify_jwt(token, min_amount=price, phone_number=phone_number)
+            wallet_valid = wallet and verify_onchain(wallet, min_amount=price, phone_number=phone_number)
+            if jwt_valid or wallet_valid:
+                return await func(*args, **kwargs)
+            else:
                 return JSONResponse(
                     status_code=402,
                     content={
-                        "error": "Payment required",
+                        "paywall": True,
                         "price": price,
-                        "currency": currency,
-                        "payment_endpoint": "https://pay.modelex.ai/pay",
-                        "phone_required": phone_required
+                        "currency": "TRUSD",
+                        "message": "Payment required to access this resource."
                     }
                 )
-
-            # 2) Check phone if needed
-            if phone_required and not check_phone_verified(request):
-                return JSONResponse(
-                    status_code=402,
-                    content={
-                        "error": "Phone verification required",
-                        "verify_url": "https://modelex.ai/verify"
-                    }
-                )
-
-            return await func(*args, **kwargs)
         return wrapper
     return decorator
 
 
-import yaml
-from functools import wraps
-from langchain.schema import LLMResult
-
-from solana.rpc.api import Client as SolanaClient  # or your preferred Solana SDK
-
-# Load Modelex config once
-with open("config.yaml", "r") as f:
-    config = yaml.safe_load(f)
-
-AGENT_WALLET = config["wallet_address"]
-RATE_PER_TOKEN = config["rate_per_token"]
-CURRENCY = config["currency"]
-NETWORK = config["network"]
-
-# Optional: initialize your Solana client
-solana_client = SolanaClient("https://api.mainnet-beta.solana.com")
-
+def _extract_auth_token(request: Request) -> Optional[str]:
+    """Extract and clean authorization token from request headers."""
+    token = request.headers.get("Authorization")
+    if token and token.startswith("Bearer "):
+        return token.replace("Bearer ", "")
+    return token

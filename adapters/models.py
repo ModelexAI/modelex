@@ -21,3 +21,19 @@ class UsageReport(BaseModel):
     amount: float
     currency: str
     metadata: Optional[Dict] = None
+
+class PaymentRequiredResponse(BaseModel):
+    error: str = "Payment required"
+    price: float
+    currency: str
+    payment_endpoint: str = "https://pay.modelex.ai/pay"
+    phone_required: bool = False
+
+class PhoneVerificationResponse(BaseModel):
+    error: str = "Phone verification required"
+    verify_url: str = "https://modelex.ai/verify"
+
+class RateLimitResponse(BaseModel):
+    error: str = "Rate limit exceeded"
+    retry_after: int
+    requests_per_minute: int
