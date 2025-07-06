@@ -1,5 +1,9 @@
-# Byte-compiled / optimized / DLL files
+# IDE and Python cache
+.idea/
 __pycache__/
+.pytest_cache/
+
+# Byte-compiled / optimized / DLL files
 *.py[codz]
 *$py.class
 
